@@ -22,8 +22,7 @@ class Layer:
 
         # Z is the matrix that holds output values
         self.Z = np.zeros((minibatch_size, size[0]))
-        # The activation function is an externally defined function (with a
-        # derivative) that is stored here
+        # the activation function for this layer - externally defined
         self.activation = activation
 
         # W is the outgoing weight matrix for this layer
@@ -48,7 +47,6 @@ class Layer:
     def forward_propagate(self):
         if self.is_input:
             return self.Z.dot(self.W)
-
         self.Z = self.activation(self.S)
         if self.is_output:
             return self.Z
@@ -60,8 +58,9 @@ class Layer:
 
 
 class ANN:
-    def __init__(self, layer_config, minibatch_size=100, epochs=100):
+    def __init__(self, eta=0.03, layer_config=[11, 10, 3], minibatch_size=100, epochs=100):
         self.layers = []
+        self.eta = eta
         self.num_layers = len(layer_config)
         self.minibatch_size = minibatch_size
         self.epochs = epochs
@@ -83,7 +82,6 @@ class ANN:
     def forward_propagate(self, data):
         # add bias values to the input
         self.layers[0].Z = np.append(data, np.ones((data.shape[0], 1)), axis=1)
-
         for i in range(self.num_layers-1):
             self.layers[i+1].S = self.layers[i].forward_propagate()
         return self.layers[-1].forward_propagate()
@@ -96,12 +94,12 @@ class ANN:
 
             self.layers[i].D = W_nobias.dot(self.layers[i+1].D) * self.layers[i].Fp
 
-    def update_weights(self, eta):
+    def update_weights(self):
         for i in range(0, self.num_layers-1):
-            W_grad = -eta*(self.layers[i+1].D.dot(self.layers[i].Z)).T
+            W_grad = -self.eta*(self.layers[i+1].D.dot(self.layers[i].Z)).T
             self.layers[i].W += W_grad
 
-    def train(self, train_data, train_labels, eta=0.03):
+    def train(self, train_data, train_labels):
         N_train = len(train_labels) * len(train_labels[0])
         print("Training for " + str(self.epochs) + " epochs...")
         for t in range(0, self.epochs):
@@ -110,7 +108,7 @@ class ANN:
             for b_data, b_labels in zip(train_data, train_labels):
                 output = self.forward_propagate(b_data)
                 self.backpropagate(output, b_labels)
-                self.update_weights(eta=eta)
+                self.update_weights()
 
             errs = 0
             for b_data, b_labels in zip(train_data, train_labels):
@@ -118,24 +116,25 @@ class ANN:
                 yhat = np.argmax(output, axis=1)
                 errs += np.sum(1 - b_labels[np.arange(len(b_labels)), yhat])
 
-            out_str = "{0} Training error: {1:.5f}".format(out_str, float(errs) / N_train)
+            out_str = "{1:.5f}".format(out_str, float(errs) / N_train) # "{0} Training error: {1:.5f}".format(out_str, float(errs) / N_train)
 
             print(out_str)
 
-    def evaluate(self, train_data, train_labels, test_data, test_labels,
-                 num_epochs=1000, eta=0.03, eval_train=False, eval_test=True):
+    def evaluate(self, train_data, train_labels, test_data, test_labels, eval_train=False, eval_test=True):
 
         N_train = len(train_labels)*len(train_labels[0])
         N_test = len(test_labels)*len(test_labels[0])
 
-        print("Training for " + str(num_epochs) + " epochs...")
-        for t in range(0, num_epochs):
-            out_str = "[{0:4d}] ".format(t)
+        training_error = []
+        test_error = []
+        print("Training for " + str(self.epochs) + " epochs...")
+        for t in range(0, self.epochs):
+            out_str = ""
 
             for b_data, b_labels in zip(train_data, train_labels):
                 output = self.forward_propagate(b_data)
                 self.backpropagate(output, b_labels)
-                self.update_weights(eta=eta)
+                self.update_weights()
 
             if eval_train:
                 errs = 0
@@ -144,7 +143,8 @@ class ANN:
                     yhat = np.argmax(output, axis=1)
                     errs += np.sum(1-b_labels[np.arange(len(b_labels)), yhat])
 
-                out_str = "{0} Training error: {1:.5f}".format(out_str, float(errs)/N_train)
+                training_error.append(float(errs)/N_train)
+                out_str = '%.5f' % (float(errs)/N_train) # "{0} Training error: {1:.5f}".format(out_str, float(errs)/N_train)
 
             if eval_test:
                 errs = 0
@@ -153,6 +153,9 @@ class ANN:
                     yhat = np.argmax(output, axis=1)
                     errs += np.sum(1-b_labels[np.arange(len(b_labels)), yhat])
 
-                out_str = "{0} Test error: {1:.5f}".format(out_str, float(errs)/N_test)
+                test_error.append(float(errs)/N_test)
+                out_str += ' %.5f' % (float(errs)/N_test) # "{0} Test error: {1:.5f}".format(out_str, float(errs)/N_test)
 
             print(out_str)
+
+        return np.array(training_error), np.array(test_error)
